@@ -1,9 +1,10 @@
 #!/bin/bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 FAILED=0
 for S in nginx cron; do
-  if ! ~/lab/check_service.sh "$S"; then
+  if ! "$SCRIPT_DIR/check_service.sh" "$S"; then
     FAILED=$((FAILED + 1))
   fi
 done
