@@ -1,0 +1,7 @@
+- name: Настройка сервера
+  hosts: servers
+  become: true
+  roles:
+    - base
+    - docker
+    - app

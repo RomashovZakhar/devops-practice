@@ -1,0 +1,64 @@
+- name: Установить базовые пакеты
+  ansible.builtin.apt:
+    name: [curl, htop, tree, ufw, fail2ban, unattended-upgrades]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Создать пользователя
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+
+- name: Добавить SSH-ключ пользователю
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
+
+- name: sudo без пароля (только для учебного сервера)
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ admin_user }}"
+    content: "{{ admin_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    mode: "0440"
+    validate: visudo -cf %s
+
+- name: Убрать старый файл hardening из этапа 6
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d/99-hardening.conf
+    state: absent
+  notify: Reload ssh
+
+- name: Закрыть SSH (без root и без паролей)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/01-hardening.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+    mode: "0644"
+    validate: sshd -t -f %s
+  notify: Reload ssh
+
+- name: Политика firewall по умолчанию
+  community.general.ufw:
+    default: deny
+    direction: incoming
+
+- name: Разрешить SSH, HTTP и HTTPS
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: ["22", "80", "443"]
+
+- name: Включить firewall
+  community.general.ufw:
+    state: enabled
+
+- name: fail2ban запущен и включён
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true

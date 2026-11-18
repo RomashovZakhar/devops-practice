@@ -1,0 +1,5 @@
+postgres_db: app
+postgres_user: app
+postgres_password: "{{ vault_postgres_password }}"
+image_tag: d28dce18783f8c3e1e4fea5d26fb0faf9a29243f
+server_ip: 192.168.1.20

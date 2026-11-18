@@ -1,0 +1,68 @@
+- name: Установить nginx и openssl
+  ansible.builtin.apt:
+    name: [nginx, openssl]
+    state: present
+
+- name: Самоподписанный сертификат
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -nodes -newkey rsa:2048 -days 365
+      -keyout /etc/ssl/private/selfsigned.key
+      -out /etc/ssl/certs/selfsigned.crt
+      -subj "/CN={{ server_ip }}"
+      -addext "subjectAltName=IP:{{ server_ip }}"
+    creates: /etc/ssl/certs/selfsigned.crt
+  notify: Reload nginx
+
+- name: Убрать сайт по умолчанию
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Конфиг сайта
+  ansible.builtin.template:
+    src: nginx-app.conf.j2
+    dest: /etc/nginx/sites-available/app
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Включить сайт
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/app
+    dest: /etc/nginx/sites-enabled/app
+    state: link
+  notify: Reload nginx
+
+- name: nginx запущен и включён
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+
+- name: Папка приложения
+  ansible.builtin.file:
+    path: "/home/{{ admin_user }}/app"
+    state: directory
+    owner: "{{ admin_user }}"
+    mode: "0750"
+
+- name: .env с секретами
+  ansible.builtin.template:
+    src: env.j2
+    dest: "/home/{{ admin_user }}/app/.env"
+    owner: "{{ admin_user }}"
+    mode: "0600"
+
+- name: compose.yaml
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "/home/{{ admin_user }}/app/compose.yaml"
+    owner: "{{ admin_user }}"
+    mode: "0644"
+
+- name: Запустить приложение
+  community.docker.docker_compose_v2:
+    project_src: "/home/{{ admin_user }}/app"
+    state: present
+  become: true
